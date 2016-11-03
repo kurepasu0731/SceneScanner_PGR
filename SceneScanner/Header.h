@@ -17,10 +17,10 @@
 #include <pcl/kdtree/kdtree_flann.h>
 #include <pcl/surface/gp3.h>
 #include <pcl/io/obj_io.h>
-
 #include <pcl/io/ply_io.h>
-#include <pcl/registration/icp.h>
-#include <pcl/visualization/pcl_visualizer.h>
+
+//#include <pcl/registration/icp.h>
+//#include <pcl/visualization/pcl_visualizer.h>
 
 #define PROJECTOR_WIDTH 1280
 #define PROJECTOR_HEIGHT 800
