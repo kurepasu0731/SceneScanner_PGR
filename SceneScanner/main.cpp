@@ -339,9 +339,65 @@ void viewPoints(Calibration calib, const cv::Mat &cam, const std::vector<cv::Poi
 			}
 }
 
+
+//*****************************************************************************************//
+//カメラ画素順にメッシュはってplyで保存
+//PLY形式で保存(法線なし,meshあり)
+void savePLY_with_oreore_mesh(std::vector<cv::Point3f> reconstructPoints, const std::string &fileName)
+{
+	//メッシュの生成
+	std::vector<cv::Point3i> meshes;
+
+	for( int y = 0; y < CAMERA_HEIGHT; y++ ) {
+		for( int x = 0; x < CAMERA_WIDTH; x++ ) {
+			if((y + 1) < CAMERA_HEIGHT && (x + 1) < CAMERA_WIDTH)
+			{
+
+				int index0 = y * CAMERA_WIDTH + x;
+				int index1 = y * CAMERA_WIDTH + x + 1;
+				int index2 = (y + 1) * CAMERA_WIDTH + x;
+				int index3 = (y + 1) * CAMERA_WIDTH + x + 1;
+
+				if(reconstructPoints[index0].x != -1 && reconstructPoints[index1].x != -1 && reconstructPoints[index2].x != -1)
+				{
+					meshes.emplace_back(cv::Point3i(index0, index2, index1));
+				}
+				if(reconstructPoints[index1].x != -1 && reconstructPoints[index2].x != -1 && reconstructPoints[index3].x != -1)
+				{
+					meshes.emplace_back(cv::Point3i(index1, index2, index3));
+				}
+
+			}
+		}
+	}
+
+	//ファイルオープン
+	FILE *fp;
+	fp = fopen(fileName.data(), "w");
+
+	//ファイルに書き込む
+	//ヘッダの設定
+	fprintf(fp,"ply\nformat ascii 1.0\nelement vertex %d\nproperty float x\nproperty float y\nproperty float z\nelement face %d\nproperty list ushort int vertex_indices\nend_header\n", reconstructPoints.size(), meshes.size());
+
+	//3次元点群
+	//m単位で保存（xmlはmm）
+	for (int n = 0; n < reconstructPoints.size(); n++){
+	   fprintf(fp, "%f %f %f\n", reconstructPoints[n].x/1000, reconstructPoints[n].y/1000, reconstructPoints[n].z/1000); //-1も入ってる
+	}
+	//面情報記述
+	for(int n = 0; n < meshes.size(); n++)
+	{
+	   fprintf(fp, "3 %d %d %d\n", meshes[n].x, meshes[n].y, meshes[n].z);
+	}
+	//ファイルクローズ
+	fclose(fp);
+}
+//*****************************************************************************************//
+
+
 int main()
 {
-	pgrOpenCV.init(FlyCapture2::PIXEL_FORMAT_MONO8, FlyCapture2::NEAREST_NEIGHBOR);
+	pgrOpenCV.init(FlyCapture2::PIXEL_FORMAT_MONO8, FlyCapture2::HQ_LINEAR); //HQ_LINEAR
 	//pgrOpenCV.setCameraParams(4.0);
 	GRAYCODE gc;
 
@@ -360,7 +416,7 @@ int main()
 	int calib_count = 0;
 
 	//背景の閾値(mm)
-	double thresh = 100.0; //1500
+	double thresh = 10.0; //1500
 
 	//背景と対象物の3次元点
 	std::vector<cv::Point3f> reconstructPoint_back;
@@ -434,7 +490,7 @@ int main()
 			cv::FileStorage fs_obj("./reconstructPoints_camera.xml", cv::FileStorage::WRITE);
 			write(fs_obj, "points", reconstructPoint_back);
 			std::cout << "背景を保存しました…" << std::endl;
-
+			
 			//確認
 			viewPoints(calib, cam2, reconstructPoint_back);
 
@@ -455,40 +511,88 @@ int main()
 	std::cout << "対象物体をスキャンします…" << std::endl;
 	reconstructPoint_obj = scanScene(calib, gc);
 
+	//*****************************************************************************************//
+	//画素対応取れてるか確認
+	//--待ち--//
+	std::cout << "目標画像を target.jpg として配置してください…" << std::endl;
+	cv::waitKey(0);
+	//目標画像読み込み
+	cv::Mat target = cv::imread("target.jpg");
+	//対応確認
+	cv::Mat dst;//カメラ画像が目標画像となるためのプロジェクタ画像
+	gc.transport_camera_projector(target, dst);
+	//保存
+	cv::imwrite("target_pro.jpg", dst);
+	//投影
+	cv::namedWindow("dst", 0);
+	Projection::MySetFullScrean(DISPLAY_NUMBER, "dst");
+	cv::imshow("dst", dst);
+	cv::waitKey(0);
+	//カメラ画像保存
+	pgrOpenCV.start();
+	pgrOpenCV.queryFrame();
+	pgrOpenCV.stop();
+	cv::imwrite("target_cam.jpg", pgrOpenCV.getVideo());
+	std::cout << "カメラ画像を保存しました…" << std::endl;
+	cv::waitKey(0);
+	//*****************************************************************************************//
+	//高精度3次元復元(下の4~6を以下で置き換えて)　<注意>GRAYCODE::makeCorrespondence()内のinterpolation()を有効にしとくこと
+	//*****************************************************************************************//
+	//平滑化
+	std::vector<cv::Point3f> reconstructPoint_smoothed;
+	calib.smoothReconstructPoints(reconstructPoint_obj, reconstructPoint_smoothed, 11);
 	//4. 背景差分
-	for(int i = 0; i < reconstructPoint_obj.size(); i++)
+	for(int i = 0; i < reconstructPoint_smoothed.size(); i++)
 	{
 		//閾値よりも深度の変化が小さかったら、(-1,-1,-1)で埋める
-		if(reconstructPoint_obj[i].z != -1 && reconstructPoint_back[i].z != -1 && abs(reconstructPoint_obj[i].z - reconstructPoint_back[i].z) < thresh) //こっちの方が正しい？
-		//if(reconstructPoint_obj[i].z == -1 || reconstructPoint_back[i].z == -1 || abs(reconstructPoint_obj[i].z - reconstructPoint_back[i].z) < thresh)
+		if(reconstructPoint_smoothed[i].z != -1 && reconstructPoint_back[i].z != -1 && abs(reconstructPoint_smoothed[i].z - reconstructPoint_back[i].z) < thresh) //こっちの方が正しい？
 		{
-		reconstructPoint_obj[i].x = -1;
-		reconstructPoint_obj[i].y = -1;
-		reconstructPoint_obj[i].z = -1;
+		reconstructPoint_smoothed[i].x = -1;
+		reconstructPoint_smoothed[i].y = -1;
+		reconstructPoint_smoothed[i].z = -1;
 		}
 	}
-
-	//5. 法線、Mesh生成
-	std::cout << "モデル生成中…" << std::endl;
-	//有効な点のみ取りだす(= -1は除く)
-	std::vector<cv::Point3f> validPoints;
-	for(int n = 0; n < reconstructPoint_obj.size(); n++)
-	{
-		if(reconstructPoint_obj[n].x != -1) validPoints.emplace_back(cv::Point3f(reconstructPoint_obj[n].x/1000, reconstructPoint_obj[n].y/1000, reconstructPoint_obj[n].z/1000)); //単位をmに
-	}
-	//法線を求める
-	std::vector<cv::Point3f> normalVecs = getNormalVectors(validPoints);
-	//メッシュを求める
-	pcl::PolygonMesh triangles;
-	std::vector<cv::Point3i> meshes = getMeshVectors(validPoints, normalVecs, triangles);
+	//カメラ画素の並びで3角メッシュ生成・ply保存
+	savePLY_with_oreore_mesh(reconstructPoint_smoothed, "reconstructPoints_oreore.ply");
+	//*****************************************************************************************//
 
 
-	//6. PLY形式で保存
-	std::cout << "モデルを保存します…" << std::endl;
-	savePLY_with_normal_mesh(validPoints, normalVecs, meshes, "reconstructPoint_obj.ply");
-	//6. OBJ形式で保存
-	pcl::io::saveOBJFile("reconstructPoint_obj.obj", triangles); //->Unity上にはRotate(0, 0, 180)で配置
-	std::cout << "モデルを保存しました…" << std::endl;
+
+	////4. 背景差分
+	//for(int i = 0; i < reconstructPoint_obj.size(); i++)
+	//{
+	//	//閾値よりも深度の変化が小さかったら、(-1,-1,-1)で埋める
+	//	if(reconstructPoint_obj[i].z != -1 && reconstructPoint_back[i].z != -1 && abs(reconstructPoint_obj[i].z - reconstructPoint_back[i].z) < thresh) //こっちの方が正しい？
+	//	//if(reconstructPoint_obj[i].z == -1 || reconstructPoint_back[i].z == -1 || abs(reconstructPoint_obj[i].z - reconstructPoint_back[i].z) < thresh)
+	//	{
+	//	reconstructPoint_obj[i].x = -1;
+	//	reconstructPoint_obj[i].y = -1;
+	//	reconstructPoint_obj[i].z = -1;
+	//	}
+	//}
+
+
+	////5. 法線、Mesh生成
+	//std::cout << "モデル生成中…" << std::endl;
+	////有効な点のみ取りだす(= -1は除く)
+	//std::vector<cv::Point3f> validPoints;
+	//for(int n = 0; n < reconstructPoint_obj.size(); n++)
+	//{
+	//	if(reconstructPoint_obj[n].x != -1) validPoints.emplace_back(cv::Point3f(reconstructPoint_obj[n].x/1000, reconstructPoint_obj[n].y/1000, reconstructPoint_obj[n].z/1000)); //単位をmに
+	//}
+	////法線を求める
+	//std::vector<cv::Point3f> normalVecs = getNormalVectors(validPoints);
+	////メッシュを求める
+	//pcl::PolygonMesh triangles;
+	//std::vector<cv::Point3i> meshes = getMeshVectors(validPoints, normalVecs, triangles);
+
+
+	////6. PLY形式で保存
+	//std::cout << "モデルを保存します…" << std::endl;
+	//savePLY_with_normal_mesh(validPoints, normalVecs, meshes, "reconstructPoint_obj.ply");
+	////6. OBJ形式で保存
+	//pcl::io::saveOBJFile("reconstructPoint_obj.obj", triangles); //->Unity上にはRotate(0, 0, 180)で配置
+	//std::cout << "モデルを保存しました…" << std::endl;
 
 
 	//7. ICPで位置検出(できない。。)
