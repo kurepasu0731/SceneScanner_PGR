@@ -632,9 +632,14 @@ void Calibration::pointCloudRender(const std::vector<cv::Point3f> &reconstructPo
 				//viewer.at<uchar>(pt_y, 3*pt_x+1) = 255;
 				//viewer.at<uchar>(pt_y, 3*pt_x+2) = 255;
 				//カメラ画像の色
-				viewer.at<uchar>(pt_y, 3*pt_x+0) = image.at<uchar>(image_y, 3*image_x+0);
-				viewer.at<uchar>(pt_y, 3*pt_x+1) = image.at<uchar>(image_y, 3*image_x+1);
-				viewer.at<uchar>(pt_y, 3*pt_x+2) = image.at<uchar>(image_y, 3*image_x+2);
+				//モノクロ
+				viewer.at<uchar>(pt_y, 3*pt_x+0) = image.at<uchar>(image_y, image_x);
+				viewer.at<uchar>(pt_y, 3*pt_x+1) = image.at<uchar>(image_y, image_x);
+				viewer.at<uchar>(pt_y, 3*pt_x+2) = image.at<uchar>(image_y, image_x);
+				//カラー
+				//viewer.at<uchar>(pt_y, 3*pt_x+0) = image.at<uchar>(image_y, 3*image_x+0);
+				//viewer.at<uchar>(pt_y, 3*pt_x+1) = image.at<uchar>(image_y, 3*image_x+1);
+				//viewer.at<uchar>(pt_y, 3*pt_x+2) = image.at<uchar>(image_y, 3*image_x+2);
 				z_buffer.at<double>(pt_y,pt_x) = reconstructPoint[i].z;
 			}
 		}
