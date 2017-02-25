@@ -416,7 +416,7 @@ int main()
 	int calib_count = 0;
 
 	//”wŒi‚Ìè‡’l(mm)
-	double thresh = 100.0; //1500
+	double thresh = 50.0; //1500
 
 	//”wŒi‚Æ‘ÎÛ•¨‚Ì3ŸŒ³“_
 	std::vector<cv::Point3f> reconstructPoint_back;
@@ -511,7 +511,7 @@ int main()
 	std::cout << "‘ÎÛ•¨‘Ì‚ğƒXƒLƒƒƒ“‚µ‚Ü‚·c" << std::endl;
 	reconstructPoint_obj = scanScene(calib, gc);
 
-	//**PĞ—p**//
+	////**PĞ—p**//
 	////*****************************************************************************************//
 	////‰æ‘f‘Î‰æ‚ê‚Ä‚é‚©Šm”F
 	////--‘Ò‚¿--//
@@ -556,7 +556,6 @@ int main()
 	////ƒJƒƒ‰‰æ‘f‚Ì•À‚Ñ‚Å3ŠpƒƒbƒVƒ…¶¬Eply•Û‘¶
 	//savePLY_with_oreore_mesh(reconstructPoint_smoothed, "reconstructPoints_oreore.ply");
 	////*****************************************************************************************//
-
 
 
 	//4. ”wŒi·•ª
